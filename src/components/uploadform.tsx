@@ -1,15 +1,16 @@
 "use client";
 
+import { auth } from "@/firebase/config";
 import { useForm } from "react-hook-form";
 import { useState } from "react";
 import { db, stg } from "@/firebase/config";
-import { addDoc, collection, Timestamp } from "firebase/firestore";
+import { addDoc, collection, Timestamp, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { v4 as uuid } from "uuid";
 
 export default function UploadForm({
   onClose,
-  onUploadSuccess
+  onUploadSuccess,
 }: {
   onClose: () => void;
   onUploadSuccess: () => void;
@@ -19,35 +20,53 @@ export default function UploadForm({
 
   const onSubmit = async (data: any) => {
     setLoading(true);
+    const user = auth.currentUser;
+
+    if (!user) {
+      alert("You must be logged in to upload a project.");
+      setLoading(false);
+      return;
+    }
+
     try {
+      // 1️⃣ Upload image first
       const imageRef = ref(stg, `images/${uuid()}-${data.image[0].name}`);
       await uploadBytes(imageRef, data.image[0]);
       const imageUrl = await getDownloadURL(imageRef);
 
+      // 2️⃣ Create Firestore project document without fileUrl
+      const projectRef = await addDoc(collection(db, "projects"), {
+        title: data.title,
+        description: data.description,
+        keywords: data.keywords,
+        price: parseFloat(data.price),
+        imageUrl,
+        fileUrl: "",
+        createdAt: Timestamp.now(),
+        ownerId: user.uid,
+        ownerName: user.displayName || user.email,
+        paidUsers: [],
+      });
+
+      const projectId = projectRef.id;
+
+      // 3️⃣ Upload file to storage path using projectId
       let fileUrl = "";
 
       if (data.file.length > 0) {
-        const fileRef = ref(stg, `files/${uuid()}-${data.file[0].name}`);
+        const fileRef = ref(stg, `projects/${projectId}/${uuid()}-${data.file[0].name}`);
         await uploadBytes(fileRef, data.file[0]);
         fileUrl = await getDownloadURL(fileRef);
       } else if (data.externalLink) {
         fileUrl = data.externalLink;
       }
 
-      await addDoc(collection(db, "projects"), {
-        title: data.title,
-        description: data.description,
-        keywords: data.keywords.split(",").map((tag: string) => tag.trim()),
-        imageUrl,
-        fileUrl,
-        price: parseFloat(data.price),
-        createdAt: Timestamp.now(),
-      });
+      // 4️⃣ Update Firestore doc with fileUrl
+      await updateDoc(projectRef, { fileUrl });
 
       alert("✅ Project uploaded successfully!");
-      
-      onUploadSuccess(); 
-      onClose(); 
+      onUploadSuccess();
+      onClose();
       reset();
     } catch (err) {
       console.error(err);
@@ -87,36 +106,40 @@ export default function UploadForm({
             placeholder="SEO Tags (comma-separated)"
             className="w-full p-2 border rounded text-black"
           />
-          <div className="w-full">
-  <label className="block bg-blue-600 text-white px-4 py-2 rounded cursor-pointer text-center">
-    Upload Image
-    <input
-      type="file"
-      accept="image/*"
-      {...register("image")}
-      className="hidden"
-      required
-    />
-  </label>
-</div>
 
-{/* File Upload Button */}
-<div className="w-full mt-2">
-  <label className="block bg-green-600 text-white px-4 py-2 rounded cursor-pointer text-center">
-    Upload File
-    <input
-      type="file"
-      {...register("file")}
-      className="hidden"
-    />
-  </label>
-</div>
+          {/* Image Upload */}
+          <div className="w-full">
+            <label className="block bg-blue-600 text-white px-4 py-2 rounded cursor-pointer text-center">
+              Upload Image
+              <input
+                type="file"
+                accept="image/*"
+                {...register("image")}
+                className="hidden"
+                required
+              />
+            </label>
+          </div>
+
+          {/* File Upload */}
+          <div className="w-full mt-2">
+            <label className="block bg-green-600 text-white px-4 py-2 rounded cursor-pointer text-center">
+              Upload File
+              <input
+                type="file"
+                {...register("file")}
+                className="hidden"
+              />
+            </label>
+          </div>
+
           <input
             type="url"
             {...register("externalLink")}
             placeholder="Or external file URL"
             className="w-full p-2 border rounded text-black"
           />
+
           <input
             type="number"
             {...register("price")}

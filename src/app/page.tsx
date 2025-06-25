@@ -14,35 +14,58 @@ import { Project } from "@/types/project";
 export default function Home() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [user, setUser] = useState<any>(null); // Use proper type if needed
+
   const router = useRouter();
 
-  // Redirect to login if not authenticated
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (!user) {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (!firebaseUser) {
         router.push("/login");
+      } else {
+        setUser(firebaseUser);
       }
     });
+
     return () => unsubscribe();
   }, [router]);
 
-  // Fetch project list
-  useEffect(() => {
-    const fetchProjects = async () => {
-      const querySnapshot = await getDocs(collection(db, "projects"));
-      const data = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Project[];
+  const fetchProjects = async () => {
+    const querySnapshot = await getDocs(collection(db, "projects"));
+    const data = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Project[];
 
-      setProjects(data);
-    };
+    setProjects(data);
+  };
+
+  useEffect(() => {
     fetchProjects();
   }, []);
+
+  // ✅ Define this here
+  const filteredProjects = projects.filter((project: Project) =>
+    project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    project.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    project.keywords?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    project.ownerName?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <main className="min-h-screen bg-gray-50 relative">
       <Navbar />
+
+      <div className="flex justify-center my-4">
+        <input
+          type="text"
+          placeholder="Search projects..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full max-w-md p-2 border rounded text-black"
+        />
+      </div>
 
       <div className="flex justify-end">
         <button
@@ -53,16 +76,24 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Floating UploadForm */}
-      {showForm && <UploadForm onClose={() => setShowForm(false)} />}
+      {showForm && (
+        <UploadForm
+          onClose={() => setShowForm(false)}
+          onUploadSuccess={fetchProjects}
+        />
+      )}
 
-      {/* Project Grid */}
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
-        {projects.length === 0 ? (
-          <p className="text-center text-black col-span-full">No projects uploaded yet.</p>
+        {filteredProjects.length === 0 ? (
+          <p className="text-center text-black col-span-full">No matching projects found.</p>
         ) : (
-          projects.map(project => (
-            <ProjectCard key={project.id} project={project} />
+          filteredProjects.map((project: Project) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              currentUserId={user?.uid}
+              onDelete={fetchProjects}
+            />
           ))
         )}
       </div>
