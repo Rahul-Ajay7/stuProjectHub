@@ -8,6 +8,7 @@ import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/firebase/config";
 import Navbar from "@/components/nav";
 import UploadForm from "@/components/uploadform";
+import Footer from "@/components/footer";
 import ProjectCard from "@/components/Projectcard";
 import { Project } from "@/types/project";
 
@@ -15,7 +16,7 @@ export default function Home() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [user, setUser] = useState<any>(null); // Use proper type if needed
+  const [user, setUser] = useState<any>(null); 
 
   const router = useRouter();
 
@@ -45,7 +46,7 @@ export default function Home() {
     fetchProjects();
   }, []);
 
-  // ✅ Define this here
+  
   const filteredProjects = projects.filter((project: Project) =>
     project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     project.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -97,6 +98,7 @@ export default function Home() {
           ))
         )}
       </div>
+      <Footer/>
     </main>
   );
 }
