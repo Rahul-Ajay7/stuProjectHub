@@ -1,12 +1,22 @@
 "use client";
 
 import { auth } from "@/firebase/config";
-import { useForm } from "react-hook-form";
+import { useForm, SubmitHandler } from "react-hook-form";
 import { useState } from "react";
 import { db, stg } from "@/firebase/config";
 import { addDoc, collection, Timestamp, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { v4 as uuid } from "uuid";
+
+interface UploadFormInputs {
+  title: string;
+  description: string;
+  keywords: string;
+  image: FileList;
+  file: FileList;
+  externalLink: string;
+  price: string;
+}
 
 export default function UploadForm({
   onClose,
@@ -15,10 +25,10 @@ export default function UploadForm({
   onClose: () => void;
   onUploadSuccess: () => void;
 }) {
-  const { register, handleSubmit, reset } = useForm();
+  const { register, handleSubmit, reset } = useForm<UploadFormInputs>();
   const [loading, setLoading] = useState(false);
 
-  const onSubmit = async (data: any) => {
+  const onSubmit: SubmitHandler<UploadFormInputs> = async (data) => {
     setLoading(true);
     const user = auth.currentUser;
 
@@ -29,12 +39,10 @@ export default function UploadForm({
     }
 
     try {
-      // 1️⃣ Upload image first
       const imageRef = ref(stg, `images/${uuid()}-${data.image[0].name}`);
       await uploadBytes(imageRef, data.image[0]);
       const imageUrl = await getDownloadURL(imageRef);
 
-      // 2️⃣ Create Firestore project document without fileUrl
       const projectRef = await addDoc(collection(db, "projects"), {
         title: data.title,
         description: data.description,
@@ -50,7 +58,6 @@ export default function UploadForm({
 
       const projectId = projectRef.id;
 
-      // 3️⃣ Upload file to storage path using projectId
       let fileUrl = "";
 
       if (data.file.length > 0) {
@@ -61,7 +68,6 @@ export default function UploadForm({
         fileUrl = data.externalLink;
       }
 
-      // 4️⃣ Update Firestore doc with fileUrl
       await updateDoc(projectRef, { fileUrl });
 
       alert("✅ Project uploaded successfully!");
@@ -107,7 +113,6 @@ export default function UploadForm({
             className="w-full p-2 border rounded text-black"
           />
 
-          {/* Image Upload */}
           <div className="w-full">
             <label className="block bg-blue-600 text-white px-4 py-2 rounded cursor-pointer text-center">
               Upload Image
@@ -121,7 +126,6 @@ export default function UploadForm({
             </label>
           </div>
 
-          {/* File Upload */}
           <div className="w-full mt-2">
             <label className="block bg-green-600 text-white px-4 py-2 rounded cursor-pointer text-center">
               Upload File
