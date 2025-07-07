@@ -5,6 +5,8 @@ import { doc, deleteDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { db, auth } from "@/firebase/config";
 import { onAuthStateChanged } from "firebase/auth";
 import { useEffect, useState } from "react";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "@/firebase/config";
 
 interface Props {
   project: Project;
@@ -25,31 +27,35 @@ export default function ProjectCard({ project, onDelete, currentUserId }: Props)
     return () => unsubscribe();
   }, [project]);
 
-  const handlePayment = () => {
-    const options = {
-      key: "YOUR_RAZORPAY_KEY_ID", // replace with your key
-      amount: project.price * 100,
-      currency: "INR",
-      name: "StuProjectHub",
-      description: project.title,
-      handler: async function () {
-        const docRef = doc(db, "projects", project.id!);
-        await updateDoc(docRef, {
-          paidUsers: arrayUnion(user.uid),
-        });
-        alert("✅ Payment successful!");
-        setHasPaid(true);
-      },
-      prefill: {
-        email: user?.email,
-      },
-      theme: {
-        color: "#6366F1",
-      },
-    };
-    const rzp = new (window as any).Razorpay(options);
-    rzp.open();
+  const handlePayment = async () => {
+  const createOrder = httpsCallable(functions, "createOrder");
+  const order = await createOrder({
+    amount: project.price,
+    currency: "INR",
+    receipt: `receipt_${project.id}`
+  });
+
+  const options = {
+    key: "YOUR_RAZORPAY_KEY_ID",
+    amount: order.data.amount,
+    currency: order.data.currency,
+    name: "StuProjectHub",
+    description: project.title,
+    order_id: order.data.id,
+    handler: async function (response: any) {
+      await updateDoc(doc(db, "projects", project.id!), {
+        paidUsers: arrayUnion(user.uid),
+      });
+      alert("✅ Payment successful!");
+      setHasPaid(true);
+    },
+    prefill: { email: user?.email },
+    theme: { color: "#6366F1" },
   };
+
+  const rzp = new (window as any).Razorpay(options);
+  rzp.open();
+};
 
   const handleDelete = async () => {
     const confirm = window.confirm("Are you sure you want to delete this project?");
